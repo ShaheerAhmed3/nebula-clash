@@ -4,11 +4,9 @@ A real-time multiplayer space shooter you can play in the browser. Create a room
 
 ## Play tonight
 
-**Live (auto-deploys from `main`):** after the first Render connect, every push ships here. First-time setup:
+**Live (auto-deploys from `main`):** Vercel Hobby, no credit card. After the first `vercel --prod` (or connecting the GitHub repo in the Vercel dashboard), every push to `main` ships. Share the `*.vercel.app` link plus a room code.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ShaheerAhmed3/nebula-clash)
-
-Sign in with GitHub, apply the blueprint, and Render gives you a public URL. Share that link (and a room code) with friends. Free instances sleep after idle time — the first load can take ~30s.
+Hobby WebSocket sessions last up to 5 minutes, so start the match soon after everyone joins.
 
 On the host machine:
 

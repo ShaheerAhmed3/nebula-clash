@@ -12,6 +12,7 @@ app.set("trust proxy", 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: true, methods: ["GET", "POST"] },
+  transports: ["websocket", "polling"],
 });
 
 app.use(express.static(path.join(__dirname, "../public")));
@@ -141,15 +142,19 @@ function lanAddresses() {
   return out;
 }
 
-server.listen(PORT, "0.0.0.0", () => {
-  const lans = lanAddresses();
-  console.log("");
-  console.log("  NEBULA CLASH  —  multiplayer space shooter");
-  console.log("  -----------------------------------------");
-  console.log(`  Local:   http://localhost:${PORT}`);
-  for (const ip of lans) console.log(`  LAN:     http://${ip}:${PORT}`);
-  console.log("");
-  console.log("  Share a room code with friends on the same Wi-Fi.");
-  console.log("  Over the internet: npx cloudflared tunnel --url http://localhost:7777");
-  console.log("");
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, "0.0.0.0", () => {
+    const lans = lanAddresses();
+    console.log("");
+    console.log("  NEBULA CLASH  —  multiplayer space shooter");
+    console.log("  -----------------------------------------");
+    console.log(`  Local:   http://localhost:${PORT}`);
+    for (const ip of lans) console.log(`  LAN:     http://${ip}:${PORT}`);
+    console.log("");
+    console.log("  Share a room code with friends on the same Wi-Fi.");
+    console.log("  Over the internet: npx cloudflared tunnel --url http://localhost:7777");
+    console.log("");
+  });
+}
+
+module.exports = server;

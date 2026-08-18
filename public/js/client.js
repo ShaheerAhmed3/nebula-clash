@@ -1,5 +1,5 @@
 (() => {
-  const socket = io({ transports: ["websocket", "polling"] });
+  const socket = io({ transports: ["websocket"] });
   const els = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
