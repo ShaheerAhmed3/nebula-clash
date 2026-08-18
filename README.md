@@ -4,6 +4,12 @@ A real-time multiplayer space shooter you can play in the browser. Create a room
 
 ## Play tonight
 
+**Live (auto-deploys from `main`):** after the first Render connect, every push ships here. First-time setup:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ShaheerAhmed3/nebula-clash)
+
+Sign in with GitHub, apply the blueprint, and Render gives you a public URL. Share that link (and a room code) with friends. Free instances sleep after idle time — the first load can take ~30s.
+
 On the host machine:
 
 ```bash
@@ -11,9 +17,9 @@ npm install
 npm start
 ```
 
-Then open the **LAN** URL printed in the terminal (same Wi-Fi) or `http://localhost:3000` on that computer.
+Then open the **LAN** URL printed in the terminal (same Wi-Fi) or `http://localhost:7777` on that computer.
 
-**Friends on another network:** keep the server running and in a second terminal run:
+**Friends on another network (no Render):** keep the server running and in a second terminal run:
 
 ```bash
 npx cloudflared tunnel --url http://localhost:7777

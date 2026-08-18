@@ -8,6 +8,7 @@ const { CONSTANTS, roomCode } = require("./game/constants");
 
 const PORT = Number(process.env.PORT) || 7777;
 const app = express();
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: true, methods: ["GET", "POST"] },
