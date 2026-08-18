@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Nebula Clash</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stars"></canvas>
+      <section id="menu" class="panel-wrap">
+        <div class="glow-orb"></div>
+        <div class="card">
+          <p class="eyebrow">Squadron uplink</p>
+          <h1>NEBULA CLASH</h1>
+          <p class="tag">Dogfight in the belly of a living star-serpent. Hook it. Ride it. Feed your friends to it.</p>
+          <label>
+            Callsign
+            <input id="name" maxlength="16" placeholder="ACE-01" autocomplete="nickname" />
+          </label>
+          <div class="row">
+            <button id="create" class="primary">Create room</button>
+          </div>
+          <div class="or">or join a friend</div>
+          <div class="join-row">
+            <input id="code" maxlength="6" placeholder="ROOM" class="code" autocomplete="off" />
+            <button id="join" class="ghost">Join</button>
+          </div>
+          <p id="menu-error" class="error" hidden></p>
+          <ul class="howto">
+            <li><kbd>A</kbd>/<kbd>D</kbd> or arrows — rotate</li>
+            <li><kbd>W</kbd> or <kbd>↑</kbd> — thrust</li>
+            <li><kbd>Space</kbd> or click — fire</li>
+            <li><kbd>Shift</kbd> / <kbd>F</kbd> / right-click — void hook</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="lobby" class="panel-wrap hidden">
+        <div class="card wide">
+          <p class="eyebrow">Hangar</p>
+          <h2>Room <span id="room-code">----</span></h2>
+          <p class="tag">Share this code. Hook asteroids to slingshot, yoink pilots into The Hollow’s jaws, or ride the serpent and rain fire.</p>
+          <ul id="pilot-list" class="pilots"></ul>
+          <p id="lobby-error" class="error" hidden></p>
+          <div class="row">
+            <button id="copy" class="ghost">Copy code</button>
+            <button id="start" class="primary">Launch</button>
+          </div>
+          <p id="waiting" class="muted">Waiting for host…</p>
+        </div>
+      </section>
+
+      <section id="hud" class="hidden">
+        <canvas id="game"></canvas>
+        <div class="hud-top">
+          <div class="chip">
+            <span>ROOM</span>
+            <strong id="hud-code">----</strong>
+          </div>
+          <div class="chip timer">
+            <span>TIME</span>
+            <strong id="hud-time">4:00</strong>
+          </div>
+          <div class="chip">
+            <span>SCORE</span>
+            <strong id="hud-score">0</strong>
+          </div>
+        </div>
+        <div class="hud-left">
+          <div class="bar-wrap">
+            <span>HULL</span>
+            <div class="bar"><i id="hp-bar"></i></div>
+          </div>
+          <div id="buffs" class="buffs"></div>
+        </div>
+        <ol id="board" class="board"></ol>
+        <div id="feed" class="feed"></div>
+        <div id="banner" class="banner hidden"></div>
+        <aside class="help">
+          <span>A/D rotate · W thrust · Space fire · Shift hook</span>
+        </aside>
+      </section>
+
+      <section id="results" class="panel-wrap hidden">
+        <div class="card wide">
+          <p class="eyebrow">Debrief</p>
+          <h2 id="winner-line">ACE wins</h2>
+          <ol id="final-board" class="final"></ol>
+          <div class="row">
+            <button id="again" class="primary">Rematch</button>
+            <button id="leave" class="ghost">Leave hangar</button>
+          </div>
+          <p class="muted" id="results-hint">Only the host can start a rematch.</p>
+        </div>
+      </section>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/audio.js"></script>
+    <script src="/js/render.js"></script>
+    <script src="/js/client.js"></script>
+  </body>
+</html>

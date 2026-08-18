@@ -1,0 +1,58 @@
+# Nebula Clash
+
+A real-time multiplayer space shooter you can play in the browser. Create a room, share a 4-character code, and dogfight around **The Hollow** — a living star-serpent that howls, swallows ships, and can be ridden.
+
+## Play tonight
+
+On the host machine:
+
+```bash
+npm install
+npm start
+```
+
+Then open the **LAN** URL printed in the terminal (same Wi-Fi) or `http://localhost:3000` on that computer.
+
+**Friends on another network:** keep the server running and in a second terminal run:
+
+```bash
+npx cloudflared tunnel --url http://localhost:7777
+```
+
+Send everyone the `https://*.trycloudflare.com` link plus your room code.
+
+## Controls
+
+| Action | Keys |
+| --- | --- |
+| Rotate | `A` / `D` or ← → |
+| Thrust | `W` or ↑ |
+| Fire | `Space` or mouse click |
+| Void hook | `Shift`, `F`, or right-click |
+
+## How a match works
+
+- Up to 8 pilots per room
+- 4-minute free-for-all
+- Shoot ships and asteroids to score
+- Pick up **Shield**, **Rapid fire**, **Tri-shot**, and **Repair** crates
+- Ships respawn after a short delay
+- Host can launch a rematch from the debrief screen
+
+## The Hollow
+
+This is the thing you’ll yell about.
+
+- Fire a **void hook** into asteroids to slingshot, into friends to yoink them, or into The Hollow to **ride the serpent** and shoot from its back.
+- Get too close to the jaws and you get **swallowed**, then **launched out the tail** as a living cannonball.
+- Every so often The Hollow **howls** — gravity rips everything toward its mouth. Perfect time to hook a friend and donate them to the void.
+
+## Scripts
+
+```bash
+npm start    # production server on port 7777
+npm test     # game-logic tests
+npm run dev  # restart on file changes (Node 18+)
+```
+
+The server listens on **7777** by default (`http://localhost:7777`). Override with `PORT=8080 npm start`.
