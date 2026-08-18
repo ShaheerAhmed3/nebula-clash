@@ -27,8 +27,10 @@ Send everyone the `https://*.trycloudflare.com` link plus your room code.
 | --- | --- |
 | Rotate | `A` / `D` or ← → |
 | Thrust | `W` or ↑ |
-| Fire | `Space` or mouse click |
-| Void hook | `Shift`, `F`, or right-click |
+| Cannons | `Space` or mouse click |
+| Homing missile | `E` |
+| Afterburner | `Shift` |
+| Void hook | `F` or right-click |
 
 ## How a match works
 
@@ -46,6 +48,9 @@ This is the thing you’ll yell about.
 - Fire a **void hook** into asteroids to slingshot, into friends to yoink them, or into The Hollow to **ride the serpent** and shoot from its back.
 - Get too close to the jaws and you get **swallowed**, then **launched out the tail** as a living cannonball.
 - Every so often The Hollow **howls** — gravity rips everything toward its mouth. Perfect time to hook a friend and donate them to the void.
+- **Afterburner** burns core energy for a sprint. **Homing missiles** lock the nearest pilot.
+- Smash rocks for **scrap**; four crystals buy a random hull / cannon / bay upgrade.
+- **Wormholes** dump you across the map. Hollow **nodes** can be cracked for score.
 
 ## Scripts
 

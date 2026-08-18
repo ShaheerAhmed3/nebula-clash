@@ -31,12 +31,15 @@
             <input id="code" maxlength="6" placeholder="ROOM" class="code" autocomplete="off" />
             <button id="join" class="ghost">Join</button>
           </div>
+          <p id="net-status" class="status">Connecting…</p>
           <p id="menu-error" class="error" hidden></p>
           <ul class="howto">
             <li><kbd>A</kbd>/<kbd>D</kbd> or arrows — rotate</li>
             <li><kbd>W</kbd> or <kbd>↑</kbd> — thrust</li>
-            <li><kbd>Space</kbd> or click — fire</li>
-            <li><kbd>Shift</kbd> / <kbd>F</kbd> / right-click — void hook</li>
+            <li><kbd>Space</kbd> or click — cannons</li>
+            <li><kbd>E</kbd> — homing missile</li>
+            <li><kbd>Shift</kbd> — afterburner</li>
+            <li><kbd>F</kbd> / right-click — void hook</li>
           </ul>
         </div>
       </section>
@@ -45,11 +48,13 @@
         <div class="card wide">
           <p class="eyebrow">Hangar</p>
           <h2>Room <span id="room-code">----</span></h2>
-          <p class="tag">Share this code. Hook asteroids to slingshot, yoink pilots into The Hollow’s jaws, or ride the serpent and rain fire.</p>
+          <p class="tag">Send friends this link, or just the room code. They can join even after you launch.</p>
+          <p id="invite" class="invite"></p>
           <ul id="pilot-list" class="pilots"></ul>
           <p id="lobby-error" class="error" hidden></p>
           <div class="row">
             <button id="copy" class="ghost">Copy code</button>
+            <button id="copy-link" class="ghost">Copy invite link</button>
             <button id="start" class="primary">Launch</button>
           </div>
           <p id="waiting" class="muted">Waiting for host…</p>
@@ -71,11 +76,22 @@
             <span>SCORE</span>
             <strong id="hud-score">0</strong>
           </div>
+          <div class="chip">
+            <span>SCRAP</span>
+            <strong id="hud-scrap">0/4</strong>
+          </div>
         </div>
         <div class="hud-left">
           <div class="bar-wrap">
             <span>HULL</span>
             <div class="bar"><i id="hp-bar"></i></div>
+          </div>
+          <div class="bar-wrap">
+            <span>CORE</span>
+            <div class="bar energy"><i id="en-bar"></i></div>
+          </div>
+          <div class="ordnance">
+            <span>MISSILES <strong id="hud-missiles">3</strong></span>
           </div>
           <div id="buffs" class="buffs"></div>
         </div>
@@ -83,7 +99,7 @@
         <div id="feed" class="feed"></div>
         <div id="banner" class="banner hidden"></div>
         <aside class="help">
-          <span>A/D rotate · W thrust · Space fire · Shift hook</span>
+          <span>A/D turn · W thrust · Space guns · E missile · Shift boost · F hook</span>
         </aside>
       </section>
 

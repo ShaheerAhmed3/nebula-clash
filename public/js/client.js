@@ -18,6 +18,9 @@
     hudTime: document.getElementById("hud-time"),
     hudScore: document.getElementById("hud-score"),
     hpBar: document.getElementById("hp-bar"),
+    enBar: document.getElementById("en-bar"),
+    hudScrap: document.getElementById("hud-scrap"),
+    hudMissiles: document.getElementById("hud-missiles"),
     buffs: document.getElementById("buffs"),
     board: document.getElementById("board"),
     feed: document.getElementById("feed"),
@@ -26,12 +29,15 @@
     waiting: document.getElementById("waiting"),
     menuError: document.getElementById("menu-error"),
     lobbyError: document.getElementById("lobby-error"),
+    netStatus: document.getElementById("net-status"),
+    invite: document.getElementById("invite"),
+    copyLink: document.getElementById("copy-link"),
     winner: document.getElementById("winner-line"),
     final: document.getElementById("final-board"),
     resultsHint: document.getElementById("results-hint"),
   };
 
-  const keys = { left: false, right: false, thrust: false, fire: false, grapple: false };
+  const keys = { left: false, right: false, thrust: false, fire: false, grapple: false, boost: false, missile: false };
   let myId = null;
   let isHost = false;
   let room = "";
@@ -65,16 +71,47 @@
     flash.t = setTimeout(() => els.banner.classList.add("hidden"), ms);
   }
 
+  function inviteUrl() {
+    return `${location.origin}/?room=${encodeURIComponent(room)}`;
+  }
+
+  function setInvite() {
+    if (els.invite && room) els.invite.textContent = inviteUrl();
+  }
+
+  function setNet(text, kind) {
+    if (!els.netStatus) return;
+    els.netStatus.textContent = text;
+    els.netStatus.classList.toggle("ok", kind === "ok");
+    els.netStatus.classList.toggle("bad", kind === "bad");
+  }
+
+  function tryJoin() {
+    SFX.unlock();
+    localStorage.setItem("nc-name", els.name.value.trim());
+    const code = els.code.value.replace(/\s+/g, "");
+    els.code.value = code.toUpperCase();
+    if (!socket.connected) {
+      err(els.menuError, "Not connected to the server yet. Wait one second and try again.");
+      return;
+    }
+    if (!code) {
+      err(els.menuError, "Enter the 4-letter room code first.");
+      return;
+    }
+    socket.emit("join", { name: els.name.value, code });
+  }
+
   els.create.onclick = () => {
     SFX.unlock();
     localStorage.setItem("nc-name", els.name.value.trim());
+    if (!socket.connected) {
+      err(els.menuError, "Not connected to the server yet. Wait one second and try again.");
+      return;
+    }
     socket.emit("create", { name: els.name.value });
   };
-  els.join.onclick = () => {
-    SFX.unlock();
-    localStorage.setItem("nc-name", els.name.value.trim());
-    socket.emit("join", { name: els.name.value, code: els.code.value });
-  };
+  els.join.onclick = tryJoin;
   els.start.onclick = () => socket.emit("start");
   els.again.onclick = () => socket.emit("again");
   els.leave.onclick = () => location.reload();
@@ -87,22 +124,48 @@
       els.copy.textContent = room;
     }
   };
+  if (els.copyLink) {
+    els.copyLink.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(inviteUrl());
+        els.copyLink.textContent = "Link copied";
+        setTimeout(() => (els.copyLink.textContent = "Copy invite link"), 1400);
+      } catch (_) {
+        els.copyLink.textContent = inviteUrl();
+      }
+    };
+  }
   els.code.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") els.join.click();
+    if (e.key === "Enter") tryJoin();
   });
   els.name.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") els.create.click();
+    if (e.key === "Enter") {
+      if (els.code.value.trim()) tryJoin();
+      else els.create.click();
+    }
   });
+
+  const presetRoom = new URLSearchParams(location.search).get("room");
+  if (presetRoom) els.code.value = presetRoom.toUpperCase();
+
+  socket.on("connect", () => {
+    setNet("Uplink live", "ok");
+    if (presetRoom && !room) tryJoin();
+  });
+  socket.on("disconnect", () => setNet("Disconnected — reconnecting…", "bad"));
+  socket.on("connect_error", () => setNet("Cannot reach the host. Check the URL and that the server is running.", "bad"));
 
   socket.on("joined", (payload) => {
     myId = payload.id;
     room = payload.code;
     isHost = payload.host;
+    if (payload.name) els.name.value = payload.name;
     els.roomCode.textContent = room;
     els.hudCode.textContent = room;
     els.start.classList.toggle("hidden", !isHost);
     els.waiting.classList.toggle("hidden", isHost);
     err(els.menuError, "");
+    setInvite();
     show("lobby");
   });
 
@@ -125,7 +188,8 @@
           else SFX.boom();
         }
       }
-      if (state.powerups.length > s.powerups.length) SFX.pickup();
+      if (state.powerups.length > s.powerups.length || (state.scraps || []).length > (s.scraps || []).length) SFX.pickup();
+      if ((s.impacts || []).some((i) => i.kind === "boom")) SFX.boom();
       if ((s.howl || 0) > 0 && (state.howl || 0) <= 0) {
         SFX.howl();
         Renderer.addShake(8);
@@ -162,6 +226,10 @@
       if (ev.kind === "yoink") {
         SFX.hook();
         lastFeed = ev.text;
+      }
+      if (ev.kind === "upgrade" || ev.kind === "node") {
+        SFX.pickup();
+        flash(ev.text, 1600);
       }
     }
   });
@@ -200,7 +268,10 @@
     const me = s.players.find((p) => p.id === myId);
     if (!me) return;
     els.hudScore.textContent = String(me.score);
-    els.hpBar.style.width = `${Math.max(0, me.health)}%`;
+    els.hpBar.style.width = `${Math.max(0, (me.health / (me.maxHealth || 100)) * 100)}%`;
+    if (els.enBar) els.enBar.style.width = `${Math.max(0, me.energy || 0)}%`;
+    if (els.hudScrap) els.hudScrap.textContent = `${me.scrap || 0}/4`;
+    if (els.hudMissiles) els.hudMissiles.textContent = String(me.missiles ?? 3);
     const t = Math.ceil(s.remaining / 1000);
     const m = Math.floor(t / 60);
     const sec = String(t % 60).padStart(2, "0");
@@ -209,6 +280,8 @@
     if (me.shield > 0) buffs.push(`Shield ${me.shield.toFixed(0)}s`);
     if (me.rapid > 0) buffs.push(`Rapid ${me.rapid.toFixed(0)}s`);
     if (me.multi > 0) buffs.push(`Tri-shot ${me.multi.toFixed(0)}s`);
+    if (me.boosting) buffs.push("Afterburner");
+    if (me.dmgMul > 1) buffs.push(`Cannons x${me.dmgMul.toFixed(2)}`);
     if (me.riding) buffs.push("Riding The Hollow");
     if (me.grapple && me.grapple.on && !me.riding) buffs.push("Void hook");
     if (me.swallowed) buffs.push("Swallowed");
@@ -228,7 +301,9 @@
     if (["ArrowRight", "KeyD"].includes(code)) keys.right = down;
     if (["ArrowUp", "KeyW"].includes(code)) keys.thrust = down;
     if (["Space"].includes(code)) keys.fire = down;
-    if (["ShiftLeft", "ShiftRight", "KeyF"].includes(code)) keys.grapple = down;
+    if (["KeyF"].includes(code)) keys.grapple = down;
+    if (["ShiftLeft", "ShiftRight"].includes(code)) keys.boost = down;
+    if (["KeyE"].includes(code)) keys.missile = down;
   }
 
   window.addEventListener("keydown", (e) => {
@@ -236,7 +311,8 @@
     if (e.repeat) return;
     bind(e.code, null, true);
     if (e.code === "Space") SFX.laser();
-    if (["ShiftLeft", "ShiftRight", "KeyF"].includes(e.code)) SFX.hook();
+    if (e.code === "KeyF") SFX.hook();
+    if (e.code === "KeyE") SFX.missile();
   });
   window.addEventListener("keyup", (e) => bind(e.code, null, false));
   window.addEventListener("mousedown", (e) => {
@@ -272,6 +348,10 @@
       Renderer.drawMenuStars(dt);
     }
     if (!els.hud.classList.contains("hidden") && state) {
+      if (state.tick !== frame.lastTick) {
+        Renderer.ingestImpacts(state.impacts);
+        frame.lastTick = state.tick;
+      }
       const interp = interpolateState(prevState, state, (now - lastStateAt) / 50);
       Renderer.draw(interp, myId, dt);
     }
@@ -314,7 +394,26 @@
           }),
         }
       : b.hollow;
-    return { ...b, players, hollow };
+    const bullets = (b.bullets || []).map((bolt) => {
+      const o = (a.bullets || []).find((x) => x.id === bolt.id);
+      if (!o) return bolt;
+      return {
+        ...bolt,
+        x: o.x + Renderer.wrapDelta(o.x, bolt.x, b.world.w) * k,
+        y: o.y + Renderer.wrapDelta(o.y, bolt.y, b.world.h) * k,
+      };
+    });
+    const asteroids = (b.asteroids || []).map((rock) => {
+      const o = (a.asteroids || []).find((x) => x.id === rock.id);
+      if (!o) return rock;
+      return {
+        ...rock,
+        x: o.x + Renderer.wrapDelta(o.x, rock.x, b.world.w) * k,
+        y: o.y + Renderer.wrapDelta(o.y, rock.y, b.world.h) * k,
+        rot: o.rot + (rock.rot - o.rot) * k,
+      };
+    });
+    return { ...b, players, hollow, bullets, asteroids };
   }
 
   function shortAngle(a, b) {

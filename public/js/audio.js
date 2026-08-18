@@ -35,5 +35,6 @@ const SFX = (() => {
     howl() { beep(70, 0.7, "sawtooth", 0.07, -20); setTimeout(() => beep(48, 0.55, "triangle", 0.05, 10), 80); },
     swallow() { beep(110, 0.35, "square", 0.06, -70); },
     launch() { beep(180, 0.2, "sawtooth", 0.06, 420); },
+    missile() { beep(160, 0.16, "sawtooth", 0.05, 260); },
   };
 })();

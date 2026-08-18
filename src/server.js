@@ -52,19 +52,27 @@ io.on("connection", (socket) => {
 
   socket.on("join", ({ name, code }) => {
     const callsign = sanitizeName(name);
-    const roomCodeIn = String(code || "").trim().toUpperCase();
+    const roomCodeIn = String(code || "").replace(/\s+/g, "").trim().toUpperCase();
     if (!callsign) return socket.emit("errorMsg", "Enter a callsign.");
     if (!roomCodeIn) return socket.emit("errorMsg", "Enter a room code.");
     const room = getRoom(roomCodeIn);
-    if (!room) return socket.emit("errorMsg", "No room with that code.");
-    if (room.phase === "playing") {
-      return socket.emit("errorMsg", "That squadron is already in combat. Wait for the next round.");
-    }
+    if (!room) return socket.emit("errorMsg", `No room ${roomCodeIn}. Ask the host to create one, then join again.`);
     const result = room.addPlayer(socket.id, callsign);
     if (result.error) return socket.emit("errorMsg", result.error);
     socket.join(room.code);
-    socket.emit("joined", { id: socket.id, code: room.code, host: room.hostId === socket.id });
+    socket.emit("joined", {
+      id: socket.id,
+      code: room.code,
+      host: room.hostId === socket.id,
+      name: result.name,
+    });
     io.to(room.code).emit("lobby", room.lobbyState());
+    if (room.phase === "playing") {
+      socket.emit("started", room.publicState());
+      io.to(room.code).emit("state", room.publicState());
+    } else if (room.phase === "results") {
+      socket.emit("results", room.lobbyState());
+    }
   });
 
   socket.on("start", () => {

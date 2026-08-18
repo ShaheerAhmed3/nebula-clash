@@ -27,21 +27,31 @@ function playerDefaults(extra = {}) {
   return {
     vx: 0,
     vy: 0,
-    health: C.SHIP_MAX_HEALTH,
+    health: extra.maxHealth || C.SHIP_MAX_HEALTH,
+    maxHealth: extra.maxHealth || C.SHIP_MAX_HEALTH,
     alive: true,
     shield: 0,
     rapid: 0,
     multi: 0,
     cooldown: 0,
     thrust: false,
+    boosting: false,
+    energy: C.ENERGY_MAX,
+    missiles: C.MISSILE_MAX,
+    missileCd: 0,
+    missileHeld: false,
+    scrap: extra.scrap || 0,
+    dmgMul: extra.dmgMul || 1,
     respawnAt: 0,
     hookCd: 0,
     hookHeld: false,
     riding: false,
     swallowed: false,
     swallowT: 0,
+    lastHit: 0,
+    gateCd: 0,
     grapple: blankGrapple(),
-    input: { left: false, right: false, thrust: false, fire: false, grapple: false },
+    input: { left: false, right: false, thrust: false, fire: false, grapple: false, boost: false, missile: false },
     lastSeq: 0,
     ...extra,
   };
@@ -67,21 +77,21 @@ class Game {
     this.hollow = null;
     this.howlT = 0;
     this.howlCd = C.HOWL_EVERY;
+    this.impacts = [];
+    this.scraps = [];
+    this.gates = [];
   }
 
   addPlayer(id, name) {
     if (this.players.size >= C.MAX_PLAYERS) return { error: "Room is full (8 players)." };
-    const taken = [...this.players.values()].some(
-      (p) => p.name.toLowerCase() === name.toLowerCase()
-    );
-    if (taken) return { error: "That callsign is already in this room." };
+    const callsign = this.uniqueName(name.slice(0, 16));
 
     const color = SHIP_COLORS[this.colorCursor % SHIP_COLORS.length];
     this.colorCursor += 1;
     const spawn = this.safeSpawn();
     this.players.set(id, playerDefaults({
       id,
-      name: name.slice(0, 16),
+      name: callsign,
       color,
       x: spawn.x,
       y: spawn.y,
@@ -91,7 +101,17 @@ class Game {
       deaths: 0,
     }));
     if (!this.hostId) this.hostId = id;
-    return { ok: true };
+    return { ok: true, name: callsign };
+  }
+
+  uniqueName(name) {
+    const used = new Set([...this.players.values()].map((p) => p.name.toLowerCase()));
+    if (!used.has(name.toLowerCase())) return name;
+    for (let n = 2; n < 99; n++) {
+      const next = `${name.slice(0, 12)}-${n}`;
+      if (!used.has(next.toLowerCase())) return next;
+    }
+    return `${name.slice(0, 10)}-${Math.floor(Math.random() * 90 + 10)}`;
   }
 
   removePlayer(id) {
@@ -112,6 +132,8 @@ class Game {
       thrust: !!input.thrust,
       fire: !!input.fire,
       grapple: !!input.grapple,
+      boost: !!input.boost,
+      missile: !!input.missile,
     };
   }
 
@@ -131,6 +153,9 @@ class Game {
     this.powerupTimer = C.POWERUP_INTERVAL;
     this.howlT = 0;
     this.howlCd = C.HOWL_EVERY;
+    this.impacts = [];
+    this.scraps = [];
+    this.spawnGates();
     for (const p of this.players.values()) {
       const spawn = this.safeSpawn();
       Object.assign(p, playerDefaults({
@@ -164,6 +189,8 @@ class Game {
         y: wrap(hy - Math.sin(heading) * i * C.HOLLOW_SPACING, C.WORLD_H),
         r,
         angle: heading,
+        node: i > 0 && i % 4 === 0,
+        nodeHp: i > 0 && i % 4 === 0 ? C.HOLLOW_NODE_HP : 0,
       });
     }
     this.hollow = { segs, heading, turn: 0 };
@@ -226,6 +253,29 @@ class Game {
     };
   }
 
+  spawnGates() {
+    this.gates = [
+      { id: "g0", x: 520, y: 520, twin: 1 },
+      { id: "g1", x: C.WORLD_W - 520, y: C.WORLD_H - 520, twin: 0 },
+    ];
+  }
+
+  spawnScrap(x, y, n = 1) {
+    for (let i = 0; i < n; i++) {
+      this.scraps.push({
+        id: `s${this.tick}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+        x: wrap(x + randRange(-18, 18), C.WORLD_W),
+        y: wrap(y + randRange(-18, 18), C.WORLD_H),
+        life: 16,
+      });
+    }
+  }
+
+  impact(x, y, kind, color) {
+    if (this.impacts.length >= 8) return;
+    this.impacts.push({ x, y, kind, color: color || "#fff" });
+  }
+
   spawnPowerup() {
     const kinds = ["shield", "rapid", "multi", "repair"];
     this.powerups.push({
@@ -257,11 +307,13 @@ class Game {
       this.powerupTimer = C.POWERUP_INTERVAL + Math.random() * 4;
     }
 
+    this.impacts = [];
     this.stepHollow(dt);
     for (const p of this.players.values()) this.stepPlayer(p, dt);
     this.stepBullets(dt);
     this.stepAsteroids(dt);
     this.stepPowerups(dt);
+    this.stepScraps(dt);
     this.collide();
     this.maintainAsteroids();
 
@@ -343,6 +395,8 @@ class Game {
     p.multi = Math.max(0, p.multi - dt);
     p.cooldown = Math.max(0, p.cooldown - dt);
     p.hookCd = Math.max(0, p.hookCd - dt);
+    p.missileCd = Math.max(0, p.missileCd - dt);
+    p.lastHit = Math.max(0, (p.lastHit || 0) - dt);
 
     const pressed = p.input.grapple && !p.hookHeld;
     p.hookHeld = !!p.input.grapple;
@@ -351,18 +405,27 @@ class Game {
       else this.fireHook(p);
     }
 
+    const missilePress = p.input.missile && !p.missileHeld;
+    p.missileHeld = !!p.input.missile;
+    if (missilePress) this.fireMissile(p);
+
     if (p.grapple.on) this.stepGrapple(p, dt);
 
     if (p.input.left) p.angle -= C.SHIP_ROTATE * dt;
     if (p.input.right) p.angle += C.SHIP_ROTATE * dt;
     p.thrust = !!p.input.thrust;
+    p.boosting = !!(p.input.boost && p.energy > 4 && !p.riding);
+
+    if (!p.boosting) p.energy = Math.min(C.ENERGY_MAX, p.energy + C.ENERGY_REGEN * dt);
+    else p.energy = Math.max(0, p.energy - C.BOOST_DRAIN * dt);
 
     if (!p.riding && p.thrust) {
-      p.vx += Math.cos(p.angle) * C.SHIP_THRUST * dt;
-      p.vy += Math.sin(p.angle) * C.SHIP_THRUST * dt;
+      const thrust = p.boosting ? C.BOOST_THRUST : C.SHIP_THRUST;
+      p.vx += Math.cos(p.angle) * thrust * dt;
+      p.vy += Math.sin(p.angle) * thrust * dt;
     }
 
-    const cap = p.grapple.on || p.riding ? C.SHIP_MAX_SPEED * 1.55 : C.SHIP_MAX_SPEED;
+    const cap = p.boosting ? C.BOOST_SPEED : p.grapple.on || p.riding ? C.SHIP_MAX_SPEED * 1.55 : C.SHIP_MAX_SPEED;
     const spd = Math.hypot(p.vx, p.vy);
     if (spd > cap) {
       p.vx = (p.vx / spd) * cap;
@@ -382,7 +445,24 @@ class Game {
       p.cooldown = p.rapid > 0 ? C.RAPID_COOLDOWN : C.FIRE_COOLDOWN;
     }
 
+    this.tryGates(p, dt);
     this.trySwallow(p);
+  }
+
+  tryGates(p, dt) {
+    p.gateCd = Math.max(0, (p.gateCd || 0) - dt);
+    if (!this.gates.length || p.gateCd > 0) return;
+    for (const g of this.gates) {
+      if (this.sep2(p.x, p.y, g.x, g.y) < 36 * 36) {
+        const dest = this.gates[g.twin];
+        p.x = dest.x + Math.cos(p.angle) * 48;
+        p.y = dest.y + Math.sin(p.angle) * 48;
+        p.gateCd = 0.8;
+        this.impact(g.x, g.y, "gate", "#7af0ff");
+        this.impact(dest.x, dest.y, "gate", "#ff7ab2");
+        break;
+      }
+    }
   }
 
   fireHook(p) {
@@ -559,18 +639,57 @@ class Game {
     const shots = p.multi > 0 ? [-0.18, 0, 0.18] : [0];
     for (const offset of shots) {
       const ang = p.angle + offset;
-      const nose = C.SHIP_RADIUS + 6;
+      const nose = C.SHIP_RADIUS + 8;
       this.bullets.push({
         id: `b${this.tick}-${Math.random().toString(36).slice(2, 8)}`,
         ownerId: p.id,
+        kind: "bolt",
         x: p.x + Math.cos(ang) * nose,
         y: p.y + Math.sin(ang) * nose,
         vx: Math.cos(ang) * C.BULLET_SPEED + p.vx * 0.25,
         vy: Math.sin(ang) * C.BULLET_SPEED + p.vy * 0.25,
+        angle: ang,
         life: C.BULLET_LIFE,
         color: p.color,
+        damage: C.BULLET_DAMAGE * (p.dmgMul || 1),
       });
     }
+  }
+
+  fireMissile(p) {
+    if (p.missileCd > 0 || p.missiles <= 0 || p.swallowed) return;
+    p.missiles -= 1;
+    p.missileCd = C.MISSILE_CD;
+    const nose = C.SHIP_RADIUS + 10;
+    this.bullets.push({
+      id: `m${this.tick}-${Math.random().toString(36).slice(2, 8)}`,
+      ownerId: p.id,
+      kind: "missile",
+      x: p.x + Math.cos(p.angle) * nose,
+      y: p.y + Math.sin(p.angle) * nose,
+      vx: Math.cos(p.angle) * C.MISSILE_SPEED,
+      vy: Math.sin(p.angle) * C.MISSILE_SPEED,
+      angle: p.angle,
+      life: C.MISSILE_LIFE,
+      color: p.color,
+      damage: C.MISSILE_DAMAGE * (p.dmgMul || 1),
+      targetId: this.lockTarget(p),
+    });
+    this.impact(p.x, p.y, "muzzle", p.color);
+  }
+
+  lockTarget(p) {
+    let best = null;
+    let bestD = C.WORLD_W * C.WORLD_W + C.WORLD_H * C.WORLD_H;
+    for (const o of this.players.values()) {
+      if (o.id === p.id || !o.alive || o.swallowed) continue;
+      const d = this.sep2(p.x, p.y, o.x, o.y);
+      if (d < bestD) {
+        bestD = d;
+        best = o.id;
+      }
+    }
+    return best;
   }
 
   stepBullets(dt) {
@@ -578,11 +697,43 @@ class Game {
     for (const b of this.bullets) {
       b.life -= dt;
       if (b.life <= 0) continue;
+      if (b.kind === "missile") this.steerMissile(b, dt);
       b.x = wrap(b.x + b.vx * dt, C.WORLD_W);
       b.y = wrap(b.y + b.vy * dt, C.WORLD_H);
+      b.angle = Math.atan2(b.vy, b.vx);
       next.push(b);
     }
     this.bullets = next;
+  }
+
+  steerMissile(b, dt) {
+    const prey = b.targetId ? this.players.get(b.targetId) : null;
+    let tx = null;
+    let ty = null;
+    if (prey && prey.alive && !prey.swallowed) {
+      tx = prey.x;
+      ty = prey.y;
+    } else if (this.hollow) {
+      tx = this.hollow.segs[0].x;
+      ty = this.hollow.segs[0].y;
+    }
+    if (tx == null) return;
+    const want = Math.atan2(wrapDelta(b.y, ty, C.WORLD_H), wrapDelta(b.x, tx, C.WORLD_W));
+    let diff = want - b.angle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const turn = clamp(diff, -C.MISSILE_TURN * dt, C.MISSILE_TURN * dt);
+    const ang = b.angle + turn;
+    b.vx = Math.cos(ang) * C.MISSILE_SPEED;
+    b.vy = Math.sin(ang) * C.MISSILE_SPEED;
+    b.angle = ang;
+  }
+
+  stepScraps(dt) {
+    this.scraps = this.scraps.filter((s) => {
+      s.life -= dt;
+      return s.life > 0;
+    });
   }
 
   stepAsteroids(dt) {
@@ -606,12 +757,15 @@ class Game {
     for (const b of this.bullets) {
       if (hitBullets.has(b.id)) continue;
       for (const a of this.asteroids) {
-        if (this.sep2(b.x, b.y, a.x, a.y) <= (a.r + C.BULLET_RADIUS) ** 2) {
+        const rad = b.kind === "missile" ? C.MISSILE_RADIUS : C.BULLET_RADIUS;
+        if (this.sep2(b.x, b.y, a.x, a.y) <= (a.r + rad) ** 2) {
           hitBullets.add(b.id);
-          a.hp -= 1;
+          a.hp -= b.kind === "missile" ? 3 : 1;
+          this.impact(b.x, b.y, "spark", b.color);
           const owner = this.players.get(b.ownerId);
           if (a.hp <= 0) {
             if (owner && owner.alive) owner.score += C.ASTEROID_SCORES[a.size];
+            this.impact(a.x, a.y, "boom", "#ffb347");
             this.splitAsteroid(a);
           }
           break;
@@ -623,10 +777,40 @@ class Game {
       if (hitBullets.has(b.id)) continue;
       for (const p of this.players.values()) {
         if (!p.alive || p.id === b.ownerId || p.swallowed) continue;
-        if (this.sep2(b.x, b.y, p.x, p.y) <= (C.SHIP_RADIUS + C.BULLET_RADIUS) ** 2) {
+        const rad = b.kind === "missile" ? C.MISSILE_RADIUS : C.BULLET_RADIUS;
+        if (this.sep2(b.x, b.y, p.x, p.y) <= (C.SHIP_RADIUS + rad) ** 2) {
           hitBullets.add(b.id);
-          this.damagePlayer(p, C.BULLET_DAMAGE, b.ownerId);
+          this.impact(b.x, b.y, b.kind === "missile" ? "boom" : "spark", b.color);
+          this.damagePlayer(p, b.damage || C.BULLET_DAMAGE, b.ownerId);
           break;
+        }
+      }
+    }
+
+    if (this.hollow) {
+      for (const b of this.bullets) {
+        if (hitBullets.has(b.id)) continue;
+        for (const seg of this.hollow.segs) {
+          if (!seg.node || seg.nodeHp <= 0) continue;
+          const rad = b.kind === "missile" ? C.MISSILE_RADIUS : C.BULLET_RADIUS;
+          if (this.sep2(b.x, b.y, seg.x, seg.y) <= (seg.r + rad) ** 2) {
+            hitBullets.add(b.id);
+            seg.nodeHp -= b.kind === "missile" ? 2 : 1;
+            this.impact(b.x, b.y, "spark", "#c4b5fd");
+            const owner = this.players.get(b.ownerId);
+            if (seg.nodeHp <= 0) {
+              seg.nodeHp = 0;
+              if (owner) owner.score += 80;
+              this.spawnScrap(seg.x, seg.y, 2);
+              this.pushEvent("node", `${owner ? owner.name : "A pilot"} cracked a Hollow node`);
+              if (this.hollow.segs.every((s) => !s.node || s.nodeHp <= 0)) {
+                this.pushEvent("howl", "THE HOLLOW IS WOUNDED");
+                this.howlT = C.HOWL_LIFE;
+                this.spawnPowerup();
+              }
+            }
+            break;
+          }
         }
       }
     }
@@ -652,6 +836,16 @@ class Game {
       this.powerups = this.powerups.filter((up) => {
         if (this.sep2(p.x, p.y, up.x, up.y) <= (C.SHIP_RADIUS + 16) ** 2) {
           this.applyPowerup(p, up.kind);
+          this.impact(up.x, up.y, "pickup", "#7dff6b");
+          return false;
+        }
+        return true;
+      });
+      this.scraps = this.scraps.filter((s) => {
+        if (this.sep2(p.x, p.y, s.x, s.y) <= (C.SHIP_RADIUS + 14) ** 2) {
+          p.scrap += 1;
+          this.impact(s.x, s.y, "pickup", "#ffe14d");
+          if (p.scrap >= C.SCRAP_NEED) this.grantUpgrade(p);
           return false;
         }
         return true;
@@ -659,16 +853,37 @@ class Game {
     }
   }
 
+  grantUpgrade(p) {
+    p.scrap = 0;
+    const roll = Math.floor(Math.random() * 3);
+    if (roll === 0) {
+      p.maxHealth = Math.min(160, (p.maxHealth || C.SHIP_MAX_HEALTH) + 20);
+      p.health = Math.min(p.maxHealth, p.health + 20);
+      this.pushEvent("upgrade", `${p.name} reinforced hull`);
+    } else if (roll === 1) {
+      p.dmgMul = Math.min(1.8, (p.dmgMul || 1) + 0.25);
+      this.pushEvent("upgrade", `${p.name} overcharged cannons`);
+    } else {
+      p.missiles = C.MISSILE_MAX;
+      p.energy = C.ENERGY_MAX;
+      p.rapid = Math.max(p.rapid, 6);
+      this.pushEvent("upgrade", `${p.name} restocked the bay`);
+    }
+  }
+
   applyPowerup(p, kind) {
     if (kind === "shield") p.shield = Math.max(p.shield, 8);
     if (kind === "rapid") p.rapid = Math.max(p.rapid, 8);
     if (kind === "multi") p.multi = Math.max(p.multi, 8);
-    if (kind === "repair") p.health = clamp(p.health + 40, 0, C.SHIP_MAX_HEALTH);
+    if (kind === "repair") p.health = clamp(p.health + 40, 0, p.maxHealth || C.SHIP_MAX_HEALTH);
   }
 
   splitAsteroid(a) {
     const idx = this.asteroids.indexOf(a);
     if (idx >= 0) this.asteroids.splice(idx, 1);
+    this.spawnScrap(a.x, a.y, a.size === "large" ? 2 : 1);
+    const room = (C.ASTEROID_MAX || 16) - this.asteroids.length;
+    if (room < 2) return;
     if (a.size === "large") {
       this.asteroids.push(this.makeAsteroid("medium", a.x, a.y, 20));
       this.asteroids.push(this.makeAsteroid("medium", a.x, a.y, 20));
@@ -680,7 +895,7 @@ class Game {
 
   maintainAsteroids() {
     const large = this.asteroids.filter((a) => a.size === "large").length;
-    if (large < 6 && this.asteroids.length < 28) {
+    if (large < 3 && this.asteroids.length < (C.ASTEROID_MAX || 16) - 2) {
       const edge = Math.floor(Math.random() * 4);
       const x = edge < 2 ? (edge === 0 ? 0 : C.WORLD_W) : randRange(0, C.WORLD_W);
       const y = edge >= 2 ? (edge === 2 ? 0 : C.WORLD_H) : randRange(0, C.WORLD_H);
@@ -696,6 +911,7 @@ class Game {
       amount *= 0.35;
     }
     p.health -= amount;
+    p.lastHit = 0.18;
     if (p.health <= 0) {
       p.health = 0;
       p.alive = false;
@@ -715,6 +931,7 @@ class Game {
         at: now(),
       });
       this.kills = this.kills.slice(0, 8);
+      this.impact(p.x, p.y, "death", p.color);
     }
   }
 
@@ -730,6 +947,9 @@ class Game {
       score: p.score,
       kills: p.kills,
       deaths: p.deaths,
+      scrap: p.scrap,
+      dmgMul: p.dmgMul,
+      maxHealth: p.maxHealth,
       shield: 2.2,
     }));
   }
@@ -778,6 +998,7 @@ class Game {
         vy: p.vy,
         angle: p.angle,
         health: p.health,
+        maxHealth: p.maxHealth || C.SHIP_MAX_HEALTH,
         score: p.score,
         kills: p.kills,
         deaths: p.deaths,
@@ -786,6 +1007,12 @@ class Game {
         rapid: p.rapid,
         multi: p.multi,
         thrust: p.thrust,
+        boosting: p.boosting,
+        energy: p.energy,
+        missiles: p.missiles,
+        scrap: p.scrap,
+        dmgMul: p.dmgMul,
+        lastHit: p.lastHit,
         riding: p.riding,
         swallowed: p.swallowed,
         grapple: p.grapple.on
@@ -797,7 +1024,11 @@ class Game {
         id: b.id,
         x: b.x,
         y: b.y,
+        vx: b.vx,
+        vy: b.vy,
+        angle: b.angle || 0,
         color: b.color,
+        kind: b.kind || "bolt",
       })),
       asteroids: this.asteroids.map((a) => ({
         id: a.id,
@@ -816,10 +1047,20 @@ class Game {
       })),
       hollow: this.hollow
         ? {
-            segs: this.hollow.segs.map((s) => ({ x: s.x, y: s.y, r: s.r, angle: s.angle })),
+            segs: this.hollow.segs.map((s) => ({
+              x: s.x,
+              y: s.y,
+              r: s.r,
+              angle: s.angle,
+              node: !!s.node,
+              nodeHp: s.nodeHp || 0,
+            })),
             howl: this.howlT,
           }
         : null,
+      scraps: this.scraps.map((s) => ({ id: s.id, x: s.x, y: s.y })),
+      gates: this.gates.map((g) => ({ id: g.id, x: g.x, y: g.y })),
+      impacts: this.impacts,
       kills: this.kills,
       events: this.events,
     };

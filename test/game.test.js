@@ -25,9 +25,9 @@ test("clamp and room codes", () => {
 test("players join, names collide, room fills", () => {
   const g = new Game("TEST", "h1");
   assert.equal(g.addPlayer("h1", "Ace").ok, true);
-  assert.equal(g.addPlayer("p2", "ace").error.includes("callsign"), true);
-  assert.equal(g.addPlayer("p2", "Bolt").ok, true);
-  for (let i = 3; i <= 8; i++) {
+  assert.equal(g.addPlayer("p2", "ace").name, "ace-2");
+  assert.equal(g.addPlayer("p3", "Bolt").ok, true);
+  for (let i = 4; i <= 8; i++) {
     assert.equal(g.addPlayer(`p${i}`, `P${i}`).ok, true);
   }
   assert.equal(g.addPlayer("p9", "Late").error.includes("full"), true);
@@ -227,4 +227,55 @@ test("howl pulls ships toward the maw", () => {
   g.howlT = 2;
   g.applyHowl(0.05);
   assert.ok(Math.abs(ace.vx) + Math.abs(ace.vy) > 0);
+});
+
+test("afterburner drains core energy", () => {
+  const g = new Game("TEST", "h1");
+  g.addPlayer("h1", "Ace");
+  g.start("h1");
+  const ace = g.players.get("h1");
+  ace.energy = 100;
+  g.setInput("h1", { thrust: true, boost: true }, 2);
+  g.stepPlayer(ace, 0.2);
+  assert.ok(ace.boosting);
+  assert.ok(ace.energy < 100);
+});
+
+test("homing missile locks and spends ammo", () => {
+  const g = new Game("TEST", "h1");
+  g.addPlayer("h1", "Ace");
+  g.addPlayer("p2", "Bolt");
+  g.start("h1");
+  const ace = g.players.get("h1");
+  ace.missiles = 3;
+  g.fireMissile(ace);
+  assert.equal(ace.missiles, 2);
+  const m = g.bullets.find((b) => b.kind === "missile");
+  assert.ok(m);
+  assert.equal(m.targetId, "p2");
+});
+
+test("scrap grants an upgrade after four pickups", () => {
+  const g = new Game("TEST", "h1");
+  g.addPlayer("h1", "Ace");
+  g.start("h1");
+  const ace = g.players.get("h1");
+  const beforeHp = ace.maxHealth;
+  const beforeDmg = ace.dmgMul;
+  ace.scrap = 4;
+  g.grantUpgrade(ace);
+  assert.equal(ace.scrap, 0);
+  assert.ok(ace.maxHealth > beforeHp || ace.dmgMul > beforeDmg || ace.missiles === CONSTANTS.MISSILE_MAX);
+});
+
+test("wormhole flings a ship to its twin", () => {
+  const g = new Game("TEST", "h1");
+  g.addPlayer("h1", "Ace");
+  g.start("h1");
+  const ace = g.players.get("h1");
+  ace.x = g.gates[0].x;
+  ace.y = g.gates[0].y;
+  ace.gateCd = 0;
+  g.tryGates(ace, 0.05);
+  assert.ok(g.sep2(ace.x, ace.y, g.gates[1].x, g.gates[1].y) < 80 * 80);
 });

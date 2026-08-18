@@ -82,3 +82,25 @@ test("two pilots can share a room and launch", async () => {
   a.close();
   b.close();
 });
+
+test("same callsign still joins, and late join works after launch", async () => {
+  const host = client();
+  const twin = client();
+  const late = client();
+  host.emit("create", { name: "Ace" });
+  const created = await once(host, "joined");
+  twin.emit("join", { name: "Ace", code: created.code });
+  const twinJoin = await once(twin, "joined");
+  assert.equal(twinJoin.code, created.code);
+  host.emit("start");
+  await once(host, "started");
+  late.emit("join", { name: "Late", code: created.code });
+  const lateJoin = await once(late, "joined");
+  assert.equal(lateJoin.code, created.code);
+  const droppedIn = await once(late, "started");
+  assert.equal(droppedIn.phase, "playing");
+  assert.ok(droppedIn.players.length >= 3);
+  host.close();
+  twin.close();
+  late.close();
+});

@@ -126,7 +126,21 @@ button.ghost {
 
 button:hover { filter: brightness(1.08); }
 .or { text-align: center; color: var(--muted); margin: 16px 0 4px; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; }
-.error { color: var(--danger); margin: 12px 0 0; }
+.error { color: var(--danger); margin: 12px 0 0; font-weight: 700; }
+.status { margin: 12px 0 0; font-size: 13px; letter-spacing: 0.08em; color: var(--muted); }
+.status.ok { color: #7dff6b; }
+.status.bad { color: var(--danger); }
+.invite {
+  font-family: "Orbitron", sans-serif;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--cyan);
+  background: rgba(3, 8, 18, 0.7);
+  border: 1px solid rgba(94, 234, 255, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
 .howto { list-style: none; padding: 16px 0 0; margin: 16px 0 0; border-top: 1px solid rgba(255,255,255,0.06); color: var(--muted); }
 .howto li { margin: 6px 0; }
 kbd {
@@ -185,6 +199,10 @@ kbd {
 .bar-wrap span { font-size: 11px; letter-spacing: 0.16em; color: var(--muted); }
 .bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
 .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff4d6d, #ffe14d 55%, #5eeaff); }
+.bar.energy i { background: linear-gradient(90deg, #38bdf8, #a78bfa); }
+.bar-wrap + .bar-wrap { margin-top: 8px; }
+.ordnance { margin-top: 8px; font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.ordnance strong { color: #ffe14d; font-family: "Orbitron", sans-serif; }
 
 .buffs { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .buff {
